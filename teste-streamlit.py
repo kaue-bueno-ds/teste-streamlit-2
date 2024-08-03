@@ -7,8 +7,8 @@ def autenticar_usuario(usuario, senha):
     return usuario == "admin" and senha == "password"
 
 def adicionar_entrada(usuario, df):
-    nova_entrada = {'Usuario': usuario, 'Data': datetime.now()}
-    df = df.append(nova_entrada, ignore_index=True)
+    nova_entrada = pd.DataFrame({'Usuario': [usuario], 'Data': [datetime.now()]})
+    df = pd.concat([df, nova_entrada], ignore_index=True)
     return df
 
 def atualizar_tabelas(df):
@@ -28,6 +28,9 @@ def atualizar_tabelas(df):
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
+if 'df' not in st.session_state:
+    st.session_state.df = pd.DataFrame(columns=['Usuario', 'Data'])
+
 if not st.session_state.logged_in:
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
@@ -35,7 +38,6 @@ if not st.session_state.logged_in:
         if autenticar_usuario(usuario, senha):
             st.session_state.logged_in = True
             st.session_state.usuario = usuario
-            st.session_state.df = pd.DataFrame(columns=['Usuario', 'Data'])
         else:
             st.error("Usuário ou senha inválidos")
 else:
