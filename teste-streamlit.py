@@ -2,9 +2,13 @@ import streamlit as st
 from datetime import datetime, timedelta
 import pandas as pd
 
+# Simulação de armazenamento de usuários
+# Em um ambiente de produção, use um banco de dados seguro
+usuarios_registrados = {"admin": "password"}
+
 # Funções auxiliares
 def autenticar_usuario(usuario, senha):
-    return usuario == "admin" and senha == "password"
+    return usuarios_registrados.get(usuario) == senha
 
 def adicionar_entrada(usuario, df):
     nova_entrada = pd.DataFrame({'Usuario': [usuario], 'Data': [datetime.now()]})
@@ -24,22 +28,41 @@ def atualizar_tabelas(df):
     resumo['Semanas Concluidas'] = resumo['Semanas Concluidas'].astype(int)
     return resumo
 
-# Definição da interface de login
+def registrar_usuario(usuario, senha):
+    if usuario in usuarios_registrados:
+        return False
+    usuarios_registrados[usuario] = senha
+    return True
+
+# Definição da interface de login e registro
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if 'df' not in st.session_state:
     st.session_state.df = pd.DataFrame(columns=['Usuario', 'Data'])
 
+# Página de Registro/Login
 if not st.session_state.logged_in:
-    usuario = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
-    if st.button("Login"):
-        if autenticar_usuario(usuario, senha):
-            st.session_state.logged_in = True
-            st.session_state.usuario = usuario
-        else:
-            st.error("Usuário ou senha inválidos")
+    escolha = st.radio("Escolha uma opção", ["Login", "Registrar"])
+    
+    if escolha == "Registrar":
+        novo_usuario = st.text_input("Novo Usuário")
+        nova_senha = st.text_input("Nova Senha", type="password")
+        if st.button("Registrar"):
+            if registrar_usuario(novo_usuario, nova_senha):
+                st.success("Usuário registrado com sucesso! Faça o login.")
+            else:
+                st.error("Usuário já existe. Escolha um nome de usuário diferente.")
+    
+    elif escolha == "Login":
+        usuario = st.text_input("Usuário")
+        senha = st.text_input("Senha", type="password")
+        if st.button("Login"):
+            if autenticar_usuario(usuario, senha):
+                st.session_state.logged_in = True
+                st.session_state.usuario = usuario
+            else:
+                st.error("Usuário ou senha inválidos")
 else:
     st.write(f"Bem-vindo, {st.session_state.usuario}!")
     
@@ -51,3 +74,7 @@ else:
     resumo = atualizar_tabelas(st.session_state.df)
     st.write("Tabela de Resumo:")
     st.table(resumo)
+    
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.usuario = None
