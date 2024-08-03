@@ -2,19 +2,13 @@ import streamlit as st
 from datetime import datetime, timedelta
 import pandas as pd
 
-# Inicializando as variáveis de sessão
-if 'usuarios_registrados' not in st.session_state:
-    st.session_state.usuarios_registrados = {"admin": "password"}
-
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-
-if 'df' not in st.session_state:
-    st.session_state.df = pd.DataFrame(columns=['Usuario', 'Data'])
+# Simulação de armazenamento de usuários
+# Em um ambiente de produção, use um banco de dados seguro
+usuarios_registrados = {"admin": "password"}
 
 # Funções auxiliares
 def autenticar_usuario(usuario, senha):
-    return st.session_state.usuarios_registrados.get(usuario) == senha
+    return usuarios_registrados.get(usuario) == senha
 
 def adicionar_entrada(usuario, df):
     nova_entrada = pd.DataFrame({'Usuario': [usuario], 'Data': [datetime.now()]})
@@ -35,12 +29,19 @@ def atualizar_tabelas(df):
     return resumo
 
 def registrar_usuario(usuario, senha):
-    if usuario in st.session_state.usuarios_registrados:
+    if usuario in usuarios_registrados:
         return False
-    st.session_state.usuarios_registrados[usuario] = senha
+    usuarios_registrados[usuario] = senha
     return True
 
 # Definição da interface de login e registro
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
+if 'df' not in st.session_state:
+    st.session_state.df = pd.DataFrame(columns=['Usuario', 'Data'])
+
+# Página de Registro/Login
 if not st.session_state.logged_in:
     escolha = st.radio("Escolha uma opção", ["Login", "Registrar"])
     
