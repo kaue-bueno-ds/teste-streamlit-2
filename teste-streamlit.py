@@ -1,52 +1,85 @@
 import streamlit as st
 from datetime import datetime, timedelta
 import pandas as pd
+import sqlite3
 
-# Inicializando as variáveis de sessão
-if 'usuarios_registrados' not in st.session_state:
-    st.session_state.usuarios_registrados = {"admin": "password"}
+# Funções auxiliares para manipulação do banco de dados
+def init_db():
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS registros (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT,
+            data TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            usuario TEXT PRIMARY KEY,
+            senha TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-
-if 'df' not in st.session_state:
-    st.session_state.df = pd.DataFrame(columns=['Usuario', 'Data'])
-
-# Funções auxiliares
 def autenticar_usuario(usuario, senha):
-    return st.session_state.usuarios_registrados.get(usuario) == senha
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM usuarios WHERE usuario = ? AND senha = ?', (usuario, senha))
+    user = cursor.fetchone()
+    conn.close()
+    return user is not None
 
-def adicionar_entrada(usuario, df):
+def registrar_usuario(usuario, senha):
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute('INSERT INTO usuarios (usuario, senha) VALUES (?, ?)', (usuario, senha))
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        conn.close()
+        return False
+
+def adicionar_entrada(usuario):
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
     hoje = datetime.now().date()
-    if not df[(df['Usuario'] == usuario) & (df['Data'].dt.date == hoje)].empty:
-        return df  # Não adiciona entrada se já houver uma para o dia de hoje
+    cursor.execute('SELECT * FROM registros WHERE usuario = ? AND DATE(data) = ?', (usuario, hoje))
+    if cursor.fetchone() is None:
+        cursor.execute('INSERT INTO registros (usuario, data) VALUES (?, ?)', (usuario, datetime.now()))
+        conn.commit()
+    conn.close()
 
-    nova_entrada = pd.DataFrame({'Usuario': [usuario], 'Data': [datetime.now()]})
-    df = pd.concat([df, nova_entrada], ignore_index=True)
+def obter_dados():
+    conn = sqlite3.connect('database.db')
+    df = pd.read_sql_query('SELECT * FROM registros', conn)
+    conn.close()
     return df
 
 def atualizar_tabelas(df):
-    # Calculando os dias únicos e as semanas concluídas
-    df['Data'] = pd.to_datetime(df['Data'])
+    df['Data'] = pd.to_datetime(df['data'])
     df['Dia'] = df['Data'].dt.date
     df['Semana'] = df['Data'].apply(lambda x: (x - timedelta(days=x.weekday() + 1)).isocalendar()[1])
     
-    dias_concluidos = df.groupby('Usuario')['Dia'].nunique().reset_index(name='Dias Concluidos')
-    semanas_concluidas = df[df.groupby(['Usuario', 'Semana'])['Dia'].transform('nunique') >= 5].groupby('Usuario')['Semana'].nunique().reset_index(name='Semanas Concluidas')
+    dias_concluidos = df.groupby('usuario')['Dia'].nunique().reset_index(name='Dias Concluidos')
+    semanas_concluidas = df[df.groupby(['usuario', 'Semana'])['Dia'].transform('nunique') >= 5].groupby('usuario')['Semana'].nunique().reset_index(name='Semanas Concluidas')
     
-    resumo = pd.merge(dias_concluidos, semanas_concluidas, on='Usuario', how='left').fillna(0)
+    resumo = pd.merge(dias_concluidos, semanas_concluidas, on='usuario', how='left').fillna(0)
     resumo['Semanas Concluidas'] = resumo['Semanas Concluidas'].astype(int)
-    resumo['Total de Dias'] = df.groupby('Usuario')['Dia'].count().values
+    resumo['Total de Dias'] = df.groupby('usuario')['Dia'].count().values
     resumo = resumo.sort_values(by=['Semanas Concluidas', 'Total de Dias'], ascending=False)
     return resumo
 
-def registrar_usuario(usuario, senha):
-    if usuario in st.session_state.usuarios_registrados:
-        return False
-    st.session_state.usuarios_registrados[usuario] = senha
-    return True
+# Inicializando o banco de dados
+init_db()
 
 # Definição da interface de login e registro
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
 if not st.session_state.logged_in:
     escolha = st.radio("Escolha uma opção", ["Login", "Registrar"])
     
@@ -72,11 +105,12 @@ else:
     st.write(f"Bem-vindo, {st.session_state.usuario}!")
     
     if st.button("Registrar o dia!"):
-        st.session_state.df = adicionar_entrada(st.session_state.usuario, st.session_state.df)
+        adicionar_entrada(st.session_state.usuario)
         st.success("Dia registrado!")
 
     # Atualizando e mostrando a tabela de resumo
-    resumo = atualizar_tabelas(st.session_state.df)
+    df = obter_dados()
+    resumo = atualizar_tabelas(df)
     st.write("Tabela do ranking:")
     st.table(resumo)
     
